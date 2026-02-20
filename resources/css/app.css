@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+@source '../**/*.vue';
+
+@theme {
+    --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* Color primario de PawfectShop */
+    --color-primary: #66e64c;
+}
+
+/* Clases personalizadas para usar en componentes */
+@layer components {
+    .bg-primary {
+        background-color: var(--color-primary);
+    }
+
+    .text-primary {
+        color: var(--color-primary);
+    }
+
+    .border-primary {
+        border-color: var(--color-primary);
+    }
+}
+

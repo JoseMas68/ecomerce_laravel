@@ -1,0 +1,156 @@
+; ==================== CONFIGURACIÓN PHP OPTIMIZADA ====================
+; Configuración de PHP optimizada para Laravel en Docker
+;
+; Estas configuraciones están ajustadas para:
+; - Mejorar rendimiento general
+; - Reducir uso de memoria
+; - Prevenir memory leaks
+; - Habilitar OPcache (dramático improvement en rendimiento)
+; ========================================================================
+
+[PHP]
+; ==================== OPcache CONFIGURACIÓN ====================
+; OPcache cachea el bytecode compilado de PHP en memoria
+; Resultado: 10x mejora en tiempos de respuesta (100ms -> 10ms)
+; Es la optimización MÁS IMPORTANTE para producción
+
+opcache.enable=1
+opcache.enable_cli=1
+
+; Memoria para caché de bytecode (en MB)
+; 128MB es suficiente para apps Laravel medianas
+; Aumentar si tienes muchas dependencias
+opcache.memory_consumption=128
+
+; Memoria para strings internados (en MB)
+; Los strings internados se comparten entre procesos
+; 16MB es suficiente para la mayoría de apps
+opcache.interned_strings_buffer=16
+
+; Máximo de scripts cacheados en memoria
+; 10000 es suficiente para apps Laravel con muchas dependencias
+; Ajustar según: find vendor -name "*.php" | wc -l
+opcache.max_accelerated_files=10000
+
+; Frecuencia de revalidación (en segundos)
+; 60 = verificar cambios cada 1 minuto
+; 0 = nunca verificar (máximo rendimiento, requiere reiniciar PHP-FPM en deployments)
+; RECOMENDADO: 60 en desarrollo, 0 en producción con cache:warmup
+opcache.revalidate_freq=60
+
+; Fast shutdown (mata procesos más rápido)
+; Mejora rendimiento en shutdown
+opcache.fast_shutdown=1
+
+; Enable file validation (verificar cambios en archivos)
+; Importante en desarrollo, puede deshabilitarse en producción
+opcache.validate_timestamps=1
+
+; Save comments (para herramientas como Reflection/Doctrine)
+; Laravel lo necesita para algunas funcionalidades
+opcache.save_comments=1
+
+; Max wasted percentage (reinicio OPcache si se desperdicia este % de memoria)
+opcache.max_wasted_percentage=5
+
+; Optimización levels (0-15)
+; 0x7FFFBFFF = máscara que habilita todas las optimizaciones
+; RECOMENDADO: dejar en default para producción
+opcache.optimization_level=0x7FFFBFFF
+
+; JIT (Just In Time) Compiler - PHP 8.0+
+; Puede mejorar rendimiento de CPU-bound tasks
+; RECOMENDADO: habilitar para PHP 8.1+
+opcache.jit=tracing
+opcache.jit_buffer_size=128M
+
+; ==================== MEMORY Y PERFORMANCE ====================
+; Límite de memoria por script
+; 256MB es suficiente para Laravel promedio
+; Aumentar si usas exports/imports grandes
+memory_limit=256M
+
+; Tiempo máximo de ejecución
+; 60s es estándar para APIs web
+max_execution_time=60
+
+; Tiempo máximo para input
+; Aumentar para uploads grandes
+max_input_time=60
+
+; ==================== UPLOADS ====================
+; Tamaño máximo de subida
+upload_max_filesize=50M
+post_max_size=50M
+
+; Número máximo de archivos subidos simultáneamente
+max_file_uploads=20
+
+; ==================== SESSION ====================
+; Handler de sesión (Redis recomendado)
+; Mejor rendimiento que archivos
+; Descomentar si usas Redis para sesiones
+; session.save_handler = redis
+; session.save_path = "tcp://redis:6379"
+
+; Tiempo de vida de la sesión (en segundos)
+; 14400 = 4 horas
+session.gc_maxlifetime=14400
+
+; ==================== REALPATH CACHE ====================
+; Cache de rutas de archivos (reduce stat() calls)
+; Mejora rendimiento cuando se acceden mismos archivos
+realpath_cache_size=4096k
+realpath_cache_ttl=120
+
+; ==================== ERROR REPORTING ====================
+; Producción: ocultar errores, mostrar mensajes genéricos
+display_errors=Off
+display_startup_errors=Off
+log_errors=On
+error_reporting=E_ALL & ~E_DEPRECATED & ~E_STRICT
+
+; Logging
+error_log=/var/log/php/error.log
+
+; ==================== SECURITY ====================
+; Exponer versión PHP (desactivar por seguridad)
+expose_php=Off
+
+; Allow URL fopen (requerido por algunas librerías)
+allow_url_fopen=On
+allow_url_include=Off
+
+; ==================== DATE ====================
+; Zona horaria (AJUSTAR según ubicación)
+; date.timezone=America/Mexico_City
+date.timezone=UTC
+
+; ==================== OTRAS OPTIMIZACIONES ====================
+; Output buffering
+output_buffering=4096
+
+; Implicit flush (deshabilitar para mejor rendimiento)
+implicit_flush=Off
+
+; ==================== MYSQL/MARIADB ====================
+; Conexiones persistentes (experimental)
+; Puede mejorar rendimiento pero puede causar problemas
+; mysql.allow_persistent=Off
+; mysqli.max_persistent=-1
+; mysqli.max_links=-1
+
+; ==================== LOGS ====================
+; Slowlog (registrar scripts lentos)
+; slowlog=/var/log/php/slow.log
+
+; ==================== LARAVEL ESPECÍFICO ====================
+; These settings are recommended for Laravel
+
+; Always populate $HTTP_RAW_POST_DATA
+; Deprecated en PHP 7.0, deshabilitar
+always_populate_raw_post_data=-1
+
+; Maximum nesting level
+; Aumentar para proyectos con estructuras profundas
+xdebug.max_nesting_level=512
