@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\RateLimiter;
+use Throwable;
 
 final class AuthController extends Controller
 {
@@ -24,14 +26,24 @@ final class AuthController extends Controller
      */
     public function register(RegisterRequest $request): JsonResponse
     {
+        // Rate limiting: 5 registros por minuto por IP
+        if (RateLimiter::tooManyAttempts('register:' . $request->ip(), 5)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Demasiados intentos de registro. Por favor intenta más tarde.',
+            ], 429);
+        }
+        
+        RateLimiter::hit('register:' . $request->ip(), 60);
+
         $user = \App\Models\User::create([
             'name' => $request->input('name'),
             'email' => $request->input('email'),
             'password' => Hash::make($request->input('password')),
         ]);
 
-        // Crear token con habilidades básicas
-        $token = $user->createToken('auth-token', ['*'])->plainTextToken;
+        // Crear token con habilidades básicas - EXPIRACIÓN A 30 DÍAS
+        $token = $user->createToken('auth-token', ['*'], now()->addDays(30))->plainTextToken;
 
         return response()->json([
             'success' => true,
@@ -40,6 +52,7 @@ final class AuthController extends Controller
                 'user' => UserResource::make($user),
                 'token' => $token,
                 'token_type' => 'Bearer',
+                'expires_at' => now()->addDays(30)->toIso8601String(),
             ],
         ], 201);
     }
@@ -52,13 +65,27 @@ final class AuthController extends Controller
      */
     public function login(LoginRequest $request): JsonResponse
     {
-        $credentials = $request->only('email', 'password');
-
-        if (!Auth::attempt($credentials)) {
-            throw ValidationException::withMessages([
-                'email' => ['Las credenciales proporcionadas son incorrectas.'],
-            ]);
+        // Rate limiting: 10 intentos por minuto por IP
+        if (RateLimiter::tooManyAttempts('login:' . $request->ip(), 10)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Demasiados intentos de inicio de sesión. Por favor intenta más tarde.',
+            ], 429);
         }
+
+        try {
+            if (!Auth::attempt($request->only('email', 'password'))) {
+                RateLimiter::hit('login:' . $request->ip(), 60);
+                throw ValidationException::withMessages([
+                    'email' => ['Las credenciales proporcionadas son incorrectas.'],
+                ]);
+            }
+        } catch (Throwable $e) {
+            RateLimiter::hit('login:' . $request->ip(), 60);
+            throw $e;
+        }
+
+        RateLimiter::clear('login:' . $request->ip());
 
         $user = Auth::user();
         if (!$user instanceof \App\Models\User) {
@@ -71,8 +98,8 @@ final class AuthController extends Controller
         // Revocar tokens anteriores para mantener solo una sesión activa
         $user->tokens()->delete();
 
-        // Crear nuevo token
-        $token = $user->createToken('auth-token', ['*'])->plainTextToken;
+        // Crear nuevo token con expiración de 30 días
+        $token = $user->createToken('auth-token', ['*'], now()->addDays(30))->plainTextToken;
 
         return response()->json([
             'success' => true,
@@ -81,6 +108,7 @@ final class AuthController extends Controller
                 'user' => UserResource::make($user),
                 'token' => $token,
                 'token_type' => 'Bearer',
+                'expires_at' => now()->addDays(30)->toIso8601String(),
             ],
         ]);
     }
