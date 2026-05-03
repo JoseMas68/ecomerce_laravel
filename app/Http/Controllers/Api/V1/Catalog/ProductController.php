@@ -30,50 +30,53 @@ class ProductController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = Product::query()->with(['brand', 'category']);
-
-            // Filter by brand_id if provided
-            if ($request->has('brand_id')) {
-                $query->where('brand_id', $request->input('brand_id'));
-            }
-
-            // Filter by category_id if provided
-            if ($request->has('category_id')) {
-                $query->where('category_id', $request->input('category_id'));
-            }
-
-            // Filter by is_active if provided
-            if ($request->has('is_active')) {
-                $query->where('is_active', $request->boolean('is_active'));
-            }
-
-            // Filter by min_price if provided
-            if ($request->has('min_price')) {
-                $query->where('price', '>=', (float) $request->input('min_price'));
-            }
-
-            // Filter by max_price if provided
-            if ($request->has('max_price')) {
-                $query->where('price', '<=', (float) $request->input('max_price'));
-            }
-
-            // Search by name, sku, or description
-            if ($request->has('search')) {
-                $searchTerm = $request->input('search');
-                $query->where(function ($q) use ($searchTerm) {
-                    $q->where('name', 'like', "%{$searchTerm}%")
-                        ->orWhere('sku', 'like', "%{$searchTerm}%")
-                        ->orWhere('description', 'like', "%{$searchTerm}%");
-                });
-            }
-
-            $products = $query->orderBy('name')->paginate(15);
-
-            return response()->json([
-                'success' => true,
-                'data' => new ProductCollection($products),
-                'message' => 'Products retrieved successfully',
-            ], 200);
+            // Cache de 5 minutos para listados de productos
+            $cacheKey = 'products:index:' . md5(json_encode($request->all()));
+            
+            return \Illuminate\Support\Facades\Cache::remember(
+                $cacheKey, 
+                now()->addMinutes(5),
+                function () use ($request) {
+                    $query = Product::query()->with(['brand', 'category']);
+        
+                    // Filter by brand_id if provided
+                    if ($request->has('brand_id')) {
+                        $query->where('brand_id', $request->input('brand_id'));
+                    }
+        
+                    // Filter by category_id if provided
+                    if ($request->has('category_id')) {
+                        $query->where('category_id', $request->input('category_id'));
+                    }
+        
+                    // Filter by is_active if provided
+                    if ($request->has('is_active')) {
+                        $query->where('is_active', $request->boolean('is_active'));
+                    }
+        
+                    // Filter by min_price if provided
+                    if ($request->has('min_price')) {
+                        $query->where('price', '>=', (float) $request->input('min_price'));
+                    }
+        
+                    // Filter by max_price if provided
+                    if ($request->has('max_price')) {
+                        $query->where('price', '<=', (float) $request->input('max_price'));
+                    }
+        
+                    // Search by name, sku, or description
+                    if ($request->has('search')) {
+                        $searchTerm = $request->input('search');
+                        $query->where(function ($q) use ($searchTerm) {
+                            $q->where('name', 'like', "%{$searchTerm}%")
+                                ->orWhere('sku', 'like', "%{$searchTerm}%")
+                                ->orWhere('description', 'like', "%{$searchTerm}%");
+                        });
+                    }
+        
+                    return $query->orderBy('name')->paginate(15);
+                }
+            );
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -92,7 +95,14 @@ class ProductController extends Controller
     public function show(int $id): JsonResponse
     {
         try {
-            $product = Product::with(['brand', 'category'])->findOrFail($id);
+            // Cache de 10 minutos para producto individual
+            $cacheKey = 'products:show:' . $id;
+            
+            $product = \Illuminate\Support\Facades\Cache::remember(
+                $cacheKey,
+                now()->addMinutes(10),
+                fn() => Product::with(['brand', 'category'])->findOrFail($id)
+            );
 
             return response()->json([
                 'success' => true,
@@ -127,6 +137,9 @@ class ProductController extends Controller
             $data = \App\Domain\Catalog\DTOs\CreateProductData::fromRequest($request);
             $product = $action($data);
 
+            // Invalidar caché de productos
+            \Illuminate\Support\Facades\Cache::tags(['products'])->flush();
+
             return response()->json([
                 'success' => true,
                 'data' => new ProductResource($product),
@@ -154,6 +167,10 @@ class ProductController extends Controller
         try {
             $data = \App\Domain\Catalog\DTOs\UpdateProductData::fromRequest($request);
             $product = $action($id, $data);
+
+            // Invalidar caché del producto específico y listados
+            \Illuminate\Support\Facades\Cache::forget('products:show:' . $id);
+            \Illuminate\Support\Facades\Cache::tags(['products'])->flush();
 
             return response()->json([
                 'success' => true,
@@ -186,6 +203,10 @@ class ProductController extends Controller
     {
         try {
             $action($id);
+
+            // Invalidar caché del producto eliminado y listados
+            \Illuminate\Support\Facades\Cache::forget('products:show:' . $id);
+            \Illuminate\Support\Facades\Cache::tags(['products'])->flush();
 
             return response()->json([
                 'success' => true,

@@ -32,7 +32,7 @@ Route::prefix('catalog')->name('catalog.')->group(function () {
 });
 
 // Carrito de compras
-Route::prefix('cart')->name('cart.')->group(function () {
+Route::prefix('cart')->name('web.cart.')->group(function () {
     Route::get('/', function () {
         return Inertia::render('Cart/Index');
     })->name('index');
